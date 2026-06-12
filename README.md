@@ -5,11 +5,6 @@ countries from the [REST Countries v5 API][rc-docs], pins each country's
 primary capital city on the map, and lets the user drill into a detail
 screen with rich country-level metadata.
 
-> Targets **iOS + Android** per the brief. The web target is disabled
-> because `react-native-maps` is native-only (it imports React Native
-> internals that have no web build). See "Adding web support" below if
-> you want to revive it with a separate web map implementation.
-
 [rc-docs]: https://restcountries.com/docs
 
 Built with:
@@ -95,57 +90,6 @@ The app uses the standard Expo Router file-based routing convention.
 └── package.json
 ```
 
-## How the two screens work
-
-### 1. Map view (`app/index.tsx`)
-
-- On mount, `useLocations()` fans out paginated requests to
-  `GET https://api.restcountries.com/countries/v5?response_fields=...&limit=100&offset=N`
-  until all countries are loaded (~3 parallel pages of 100). Responses
-  are normalized into the app's `Location` type and entries without a
-  primary capital with coordinates are dropped.
-- While requests are in flight the screen renders `<LoadingState>`. On
-  total failure it renders `<ErrorState>` with a working **Try again**
-  action.
-- When data arrives, the `MapView` calls `fitToCoordinates` once on
-  `onMapReady` so all pins fit the viewport regardless of where the user
-  is in the world.
-- Each pin (`<Marker>`, `tracksViewChanges={false}` for perf) shows the
-  capital name + "Capital of {country}" in its callout. Tapping the
-  callout (iOS) or the pin (Android) routes to `/location/[id]` via
-  Expo Router's typed router, where `[id]` is the country's ISO-3 code.
-- A floating **Recenter** button refits the camera to all markers.
-
-### 2. Detail view (`app/location/[id].tsx`)
-
-- Reads `id` (the ISO-3 alpha code) from the URL with
-  `useLocalSearchParams`.
-- `useLocation(id)` calls
-  `GET /countries/v5/codes.alpha_3/{id}?response_fields=...`, so the
-  screen can be deep-linked / refreshed independently (no reliance on
-  in-memory list state).
-- Renders the country's flag as a hero image, then the capital city
-  name, region/population/coordinate pills, languages, currencies (with
-  symbols), timezones, the flag description, an embedded mini-map
-  centered on the capital, and a **Open in Google Maps** button that
-  uses a `https://www.google.com/maps/search/?api=1&query=lat,lng` deep
-  link.
-
-## Authentication
-
-REST Countries v5 requires a `Authorization: Bearer <key>` header on
-every request. The key is read at build time from
-`process.env.EXPO_PUBLIC_RESTCOUNTRIES_KEY`. Expo automatically inlines
-any env var prefixed with `EXPO_PUBLIC_` into the JS bundle when the
-bundler starts, so make sure to **restart the dev server after editing
-`.env`** for changes to take effect.
-
-`EXPO_PUBLIC_*` env vars are shipped to clients — they are not secrets.
-For a production deployment that uses a paid REST Countries plan, the
-right pattern is to proxy the request through your own server so the
-key never leaves the backend. See the "Production considerations"
-section below.
-
 ## API & data layer
 
 The data layer is split into three layers so a real client project can
@@ -164,11 +108,6 @@ grow into it:
    with loading / error / retry state and `AbortController`-based
    cancellation so screen unmounts don't leak in-flight requests.
 
-This MVP intentionally avoids React Query / SWR to keep dependencies
-tight, but the hook signatures (`{ data, isLoading, error, reload }`)
-are shaped to match those libraries to make a future migration
-mechanical.
-
 ## Configuration choices
 
 - **TypeScript strict mode + `@/*` alias.** `src/...` is reachable as
@@ -185,50 +124,6 @@ mechanical.
   EAS Build / app-store submission have a consistent identifier from
   day one.
 
-## Production considerations (not done in MVP)
-
-These are intentionally left for follow-up work but flagged here so the
-client knows what's needed to ship to the stores:
-
-- **Proxy the REST Countries API key server-side.** `EXPO_PUBLIC_*`
-  env vars are embedded in the JS bundle and can be extracted from any
-  installed build. For a paid plan, route requests through a thin
-  proxy (Cloudflare Worker, Fly machine, etc.) that holds the real key
-  server-side.
-- **Google Maps API keys on Android** (and optionally iOS via
-  `PROVIDER_GOOGLE`). The current setup uses the platform's default
-  provider, which is fine for development and for Apple Maps on iOS
-  but Google Maps on Android will need an API key + SHA-1 restriction
-  once the app is distributed via EAS Build. See
-  [the SDK 54 map-view docs](https://docs.expo.dev/versions/v54.0.0/sdk/map-view/#deploy-app-with-google-maps).
-- **App icons & splash assets** — the default Expo placeholders are
-  still in `assets/`. Replace before submission.
-- **EAS configuration** — `eas.json` and project linking with
-  `eas init` / `eas build:configure`.
-- **Server-side or cached data layer** — REST Countries data is
-  effectively static and could be pre-baked or aggressively cached
-  (TanStack Query + AsyncStorage, or a small backend) for offline-first
-  behavior.
-- **Marker clustering** — at world zoom 240+ pins are usable but
-  cluttered; consider `react-native-maps-super-cluster` or building
-  region-based clusters when zooming out.
-- **Testing** — Jest + `@testing-library/react-native` for unit tests,
-  and Detox or Maestro for end-to-end on simulators/devices.
-
-## Adding web support (optional)
-
-`react-native-maps` doesn't ship a web build, so the web target is
-disabled. To re-enable it:
-
-1. `npx expo install react-native-web react-dom @expo/metro-runtime`
-2. Add `"web": { "bundler": "metro", "favicon": "./assets/favicon.png" }`
-   back to `app.json`.
-3. Replace the map UI with a web-friendly alternative — either Leaflet
-   via `react-leaflet`, or the Google Maps JS API. The cleanest pattern
-   is per-platform file splits: create `app/index.web.tsx` and
-   `app/location/[id].web.tsx` alongside the existing native files so
-   each target gets its own map implementation while sharing the rest
-   of the app (data layer, theme, navigation).
 
 ## Quality gates
 
