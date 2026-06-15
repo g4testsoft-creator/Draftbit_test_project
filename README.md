@@ -69,7 +69,6 @@ The app uses the standard Expo Router file-based routing convention.
 │   │   ├── ErrorBoundary.tsx     Class component that catches render errors
 │   │   ├── ErrorState.tsx        Reusable error + retry UI
 │   │   ├── LoadingState.tsx      Reusable loading UI
-│   │   ├── MapPinCallout.tsx     Memoized Marker + Callout (perf: 250 markers)
 │   │   ├── MetaPill.tsx          Detail screen pill
 │   │   └── DetailSection.tsx     Detail screen title+body section
 │   ├── constants/
