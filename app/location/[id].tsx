@@ -36,9 +36,10 @@ function useIdParam(): string | undefined {
 
 export default function LocationDetailScreen() {
   const id = useIdParam();
-  const { data, isLoading, error, reload } = useLocation(id);
+  const state = useLocation(id);
+  const { reload } = state;
 
-  if (isLoading && !data) {
+  if (state.status === 'loading') {
     return (
       <>
         <Stack.Screen options={{ title: 'Loading…' }} />
@@ -47,19 +48,23 @@ export default function LocationDetailScreen() {
     );
   }
 
-  if (error || !data) {
+  // If we have no data to show (either pure error, or "Missing id" on cold
+  // start), render the error state. Stale data + a failed background
+  // refresh falls through to the normal UI below.
+  if (state.data === null) {
     return (
       <>
         <Stack.Screen options={{ title: 'Not found' }} />
         <ErrorState
           title="Couldn't load this location"
-          message={error?.message ?? 'Try again in a moment.'}
+          message={state.error.message}
           onRetry={reload}
         />
       </>
     );
   }
 
+  const data = state.data;
   const { details } = data;
 
   return (

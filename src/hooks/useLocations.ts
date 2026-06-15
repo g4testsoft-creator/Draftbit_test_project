@@ -3,9 +3,19 @@
  * AbortController-based cancellation so screens can render
  * declaratively.
  *
+ * State is modelled as a discriminated union (`status: 'loading' |
+ * 'success' | 'error'`) so impossible combinations — e.g. "loading and
+ * error at the same time" — can't be expressed. Consumers narrow with
+ * `if (state.status === 'success')` and the compiler enforces that
+ * `state.data` is non-null inside that branch.
+ *
+ * The `error` variant carries a (possibly cached) `data` so that a
+ * failed background refresh on the detail screen can keep stale data
+ * on screen rather than tearing the UI down.
+ *
  * Kept dependency-free (no React Query) to stay minimal for the MVP,
- * but the hook signatures (`{ data, isLoading, error, reload }`) match
- * the major data libraries so a future migration is mechanical.
+ * but the union and `reload` action are shaped so a migration to
+ * TanStack Query / SWR remains mechanical.
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -14,18 +24,31 @@ import { getLocation } from '@/api/cache';
 import { fetchLocationById, fetchLocations } from '@/api/locations';
 import type { Location } from '@/types/location';
 
-type AsyncState<T> = {
-  data: T | null;
-  isLoading: boolean;
-  error: Error | null;
-};
+export type AsyncState<T> =
+  | { status: 'loading'; data: null; error: null }
+  | { status: 'success'; data: T; error: null }
+  | { status: 'error'; data: T | null; error: Error };
+
+const loadingState = <T>(): AsyncState<T> => ({
+  status: 'loading',
+  data: null,
+  error: null,
+});
+
+const successState = <T>(data: T): AsyncState<T> => ({
+  status: 'success',
+  data,
+  error: null,
+});
+
+const errorState = <T>(error: Error, data: T | null = null): AsyncState<T> => ({
+  status: 'error',
+  data,
+  error,
+});
 
 export function useLocations() {
-  const [state, setState] = useState<AsyncState<Location[]>>({
-    data: null,
-    isLoading: true,
-    error: null,
-  });
+  const [state, setState] = useState<AsyncState<Location[]>>(loadingState);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -35,15 +58,11 @@ export function useLocations() {
     fetchLocations(controller.signal)
       .then((data) => {
         if (cancelled) return;
-        setState({ data, isLoading: false, error: null });
+        setState(successState(data));
       })
       .catch((error: unknown) => {
         if (cancelled || controller.signal.aborted) return;
-        setState({
-          data: null,
-          isLoading: false,
-          error: error instanceof Error ? error : new Error(String(error)),
-        });
+        setState(errorState(error instanceof Error ? error : new Error(String(error))));
       });
 
     return () => {
@@ -55,7 +74,7 @@ export function useLocations() {
   // Resetting loading state in the reload handler (not in the effect)
   // satisfies React 19's `react-hooks/set-state-in-effect` rule.
   const reload = useCallback(() => {
-    setState({ data: null, isLoading: true, error: null });
+    setState(loadingState());
     setReloadKey((k) => k + 1);
   }, []);
 
@@ -66,13 +85,9 @@ export function useLocation(id: string | undefined) {
   // Seed from the in-memory cache so a tap from the map list renders
   // instantly without a loading flicker.
   const [state, setState] = useState<AsyncState<Location>>(() => {
-    if (!id) {
-      return { data: null, isLoading: false, error: new Error('Missing id') };
-    }
+    if (!id) return errorState(new Error('Missing id'));
     const cached = getLocation(id);
-    return cached
-      ? { data: cached, isLoading: false, error: null }
-      : { data: null, isLoading: true, error: null };
+    return cached ? successState(cached) : loadingState();
   });
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -86,25 +101,22 @@ export function useLocation(id: string | undefined) {
       .then((data) => {
         if (cancelled) return;
         if (!data) {
-          setState({
-            data: null,
-            isLoading: false,
-            error: new Error('Location not found'),
-          });
+          setState(errorState(new Error('Location not found')));
           return;
         }
-        setState({ data, isLoading: false, error: null });
+        setState(successState(data));
       })
       .catch((error: unknown) => {
         if (cancelled || controller.signal.aborted) return;
-        setState((prev) => ({
+        setState((prev) =>
           // Keep any pre-rendered (cached) data on screen if a background
           // refresh fails — REST Countries data is essentially static so
           // it's better UX than tearing the screen down.
-          data: prev.data,
-          isLoading: false,
-          error: error instanceof Error ? error : new Error(String(error)),
-        }));
+          errorState(
+            error instanceof Error ? error : new Error(String(error)),
+            prev.data,
+          ),
+        );
       });
 
     return () => {
@@ -114,7 +126,7 @@ export function useLocation(id: string | undefined) {
   }, [id, reloadKey]);
 
   const reload = useCallback(() => {
-    setState({ data: null, isLoading: true, error: null });
+    setState(loadingState());
     setReloadKey((k) => k + 1);
   }, []);
 

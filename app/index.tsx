@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import MapView, { Marker, type Region } from 'react-native-maps';
+import MapView, { Marker } from 'react-native-maps';
 
 import { ErrorState } from '@/components/ErrorState';
 import { LoadingState } from '@/components/LoadingState';
@@ -13,7 +13,8 @@ import type { Location } from '@/types/location';
 export default function MapScreen() {
   const router = useRouter();
   const mapRef = useRef<MapView>(null);
-  const { data, isLoading, error, reload } = useLocations();
+  const state = useLocations();
+  const { reload } = state;
 
   const handlePinPress = useCallback(
     (location: Location) => {
@@ -26,30 +27,28 @@ export default function MapScreen() {
   );
 
   const fitToMarkers = useCallback(() => {
-    if (!mapRef.current || !data || data.length === 0) return;
+    if (!mapRef.current || !state.data || state.data.length === 0) return;
     mapRef.current.fitToCoordinates(
-      data.map((l) => l.coordinates),
+      state.data.map((l) => l.coordinates),
       { edgePadding: FIT_EDGE_PADDING, animated: true },
     );
-  }, [data]);
+  }, [state.data]);
 
   const subtitle = useMemo(() => {
-    if (!data) return '';
-    return `${data.length} capitals loaded from REST Countries`;
-  }, [data]);
+    if (!state.data) return '';
+    return `${state.data.length} capitals loaded from REST Countries`;
+  }, [state.data]);
 
-  if (isLoading) {
+  if (state.status === 'loading') {
     return <LoadingState label="Loading capitals…" />;
   }
 
-  if (error || !data) {
-    return (
-      <ErrorState
-        message={error?.message ?? 'Unable to load capitals.'}
-        onRetry={reload}
-      />
-    );
+  if (state.status === 'error' && !state.data) {
+    return <ErrorState message={state.error.message} onRetry={reload} />;
   }
+
+  // `success` or `error` with cached data — `state.data` is non-null here.
+  const locations = state.data;
 
   return (
     <View style={styles.container}>
@@ -61,7 +60,7 @@ export default function MapScreen() {
         showsCompass={Platform.OS === 'ios'}
         showsScale={Platform.OS === 'ios'}
       >
-        {data.map((location) => (
+        {locations?.map((location) => (
           <Marker
             key={location.id}
             identifier={location.id}
