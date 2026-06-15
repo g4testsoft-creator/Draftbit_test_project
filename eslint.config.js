@@ -20,7 +20,6 @@ module.exports = [
       'coverage/**',
       'ios/**',
       'android/**',
-      'worker/**',
       'babel.config.js',
       'metro.config.js',
       'jest.config.js',

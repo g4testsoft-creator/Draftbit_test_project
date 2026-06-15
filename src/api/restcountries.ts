@@ -1,6 +1,25 @@
 import type { Location } from '@/types/location';
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL?.replace(/\/+$/, '');
+const BASE_URL = 'https://api.restcountries.com/countries/v5';
+
+const RESPONSE_FIELDS = [
+  'names.common',
+  'names.official',
+  'codes.alpha_3',
+  'capitals',
+  'region',
+  'subregion',
+  'population',
+  'languages',
+  'currencies',
+  'flag.url_png',
+  'flag.description',
+  'timezones',
+].join(',');
+
+const MAX_PAGE_SIZE = 100;
+
+const apiKey = process.env.EXPO_PUBLIC_RESTCOUNTRIES_KEY;
 
 export class RestCountriesApiError extends Error {
   constructor(
@@ -34,38 +53,59 @@ export type RawCountry = {
   timezones?: string[];
 };
 
-type WorkerError = { error?: { message?: string } };
+type RestCountriesEnvelope<T> = {
+  data?: {
+    objects?: T[];
+    meta?: {
+      total?: number;
+      count?: number;
+      limit?: number;
+      offset?: number;
+      more?: boolean;
+    };
+  };
+  errors?: { message: string }[];
+};
 
-async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
-  if (!BASE_URL) {
+function authHeaders(): HeadersInit {
+  if (!apiKey) {
     throw new RestCountriesApiError(
-      'EXPO_PUBLIC_API_BASE_URL is not set. Add the Cloudflare Worker URL to your .env file. See .env.example.',
+      'EXPO_PUBLIC_RESTCOUNTRIES_KEY is not set. Add it to your .env file. See .env.example.',
     );
   }
+  return {
+    Accept: 'application/json',
+    Authorization: `Bearer ${apiKey}`,
+  };
+}
 
+async function get<T>(
+  path: string,
+  signal?: AbortSignal,
+): Promise<RestCountriesEnvelope<T>> {
   const response = await fetch(`${BASE_URL}${path}`, {
     signal,
-    headers: { Accept: 'application/json' },
+    headers: authHeaders(),
   });
 
-  let payload: T | WorkerError;
+  let payload: RestCountriesEnvelope<T>;
   try {
-    payload = (await response.json()) as T | WorkerError;
+    payload = (await response.json()) as RestCountriesEnvelope<T>;
   } catch {
     throw new RestCountriesApiError(
-      `Invalid JSON response from the API (HTTP ${response.status})`,
+      `Invalid JSON response from REST Countries (HTTP ${response.status})`,
       response.status,
     );
   }
 
   if (!response.ok) {
     const message =
-      (payload as WorkerError).error?.message ??
-      `API request failed (HTTP ${response.status})`;
+      payload.errors?.[0]?.message ??
+      `REST Countries request failed (HTTP ${response.status})`;
     throw new RestCountriesApiError(message, response.status);
   }
 
-  return payload as T;
+  return payload;
 }
 
 function pickPrimaryCapital(country: RawCountry): RawCapital | null {
@@ -120,11 +160,31 @@ export function normalizeCountry(country: RawCountry): Location | null {
 export async function fetchAllCountriesAsLocations(
   signal?: AbortSignal,
 ): Promise<Location[]> {
-  const result = await getJson<{ objects: RawCountry[] }>('/countries', signal);
+  const firstPath = `?response_fields=${encodeURIComponent(RESPONSE_FIELDS)}&limit=${MAX_PAGE_SIZE}&offset=0`;
+  const first = await get<RawCountry>(firstPath, signal);
+  const total = first.data?.meta?.total ?? first.data?.objects?.length ?? 0;
+  const pages: RawCountry[][] = [first.data?.objects ?? []];
+
+  const remainingOffsets: number[] = [];
+  for (let offset = MAX_PAGE_SIZE; offset < total; offset += MAX_PAGE_SIZE) {
+    remainingOffsets.push(offset);
+  }
+
+  const remaining = await Promise.all(
+    remainingOffsets.map(async (offset) => {
+      const path = `?response_fields=${encodeURIComponent(RESPONSE_FIELDS)}&limit=${MAX_PAGE_SIZE}&offset=${offset}`;
+      const page = await get<RawCountry>(path, signal);
+      return page.data?.objects ?? [];
+    }),
+  );
+  pages.push(...remaining);
+
   const locations: Location[] = [];
-  for (const country of result.objects ?? []) {
-    const normalized = normalizeCountry(country);
-    if (normalized) locations.push(normalized);
+  for (const page of pages) {
+    for (const country of page) {
+      const normalized = normalizeCountry(country);
+      if (normalized) locations.push(normalized);
+    }
   }
   return locations;
 }
@@ -133,14 +193,11 @@ export async function fetchCountryByAlpha3(
   alpha3: string,
   signal?: AbortSignal,
 ): Promise<Location | null> {
-  try {
-    const result = await getJson<{ object: RawCountry }>(
-      `/country/${encodeURIComponent(alpha3)}`,
-      signal,
-    );
-    return normalizeCountry(result.object);
-  } catch (err) {
-    if (err instanceof RestCountriesApiError && err.status === 404) return null;
-    throw err;
-  }
+  const path =
+    `/codes.alpha_3/${encodeURIComponent(alpha3)}` +
+    `?response_fields=${encodeURIComponent(RESPONSE_FIELDS)}`;
+  const result = await get<RawCountry>(path, signal);
+  const first = result.data?.objects?.[0];
+  if (!first) return null;
+  return normalizeCountry(first);
 }

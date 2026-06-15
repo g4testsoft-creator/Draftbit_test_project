@@ -10,11 +10,10 @@ import {
   Text,
   View,
 } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
-
 import { DetailSection } from '@/components/DetailSection';
 import { ErrorState } from '@/components/ErrorState';
 import { LoadingState } from '@/components/LoadingState';
+import { MapView, Marker } from '@/components/Map';
 import { MetaPill } from '@/components/MetaPill';
 import { DETAIL_ZOOM_DELTA } from '@/constants/map';
 import { useLocation } from '@/hooks/useLocations';

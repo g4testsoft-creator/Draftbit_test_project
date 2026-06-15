@@ -28,6 +28,12 @@
       },
       "edgeToEdgeEnabled": true
     },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/favicon.png",
+      "name": "World Capitals"
+    },
     "plugins": [
       "expo-router"
     ],

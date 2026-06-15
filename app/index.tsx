@@ -1,10 +1,10 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
 
 import { ErrorState } from '@/components/ErrorState';
 import { LoadingState } from '@/components/LoadingState';
+import { MapView, Marker, type MapHandle } from '@/components/Map';
 import { FIT_EDGE_PADDING, WORLD_REGION } from '@/constants/map';
 import { useLocations } from '@/hooks/useLocations';
 import { colors, radii, spacing, typography } from '@/theme';
@@ -12,7 +12,7 @@ import type { Location } from '@/types/location';
 
 export default function MapScreen() {
   const router = useRouter();
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<MapHandle>(null);
   const state = useLocations();
   const { reload } = state;
 

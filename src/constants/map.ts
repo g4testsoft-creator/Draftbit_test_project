@@ -1,4 +1,4 @@
-import type { Region } from 'react-native-maps';
+import type { Region } from '@/components/Map';
 
 export const WORLD_REGION: Region = {
   latitude: 20,
