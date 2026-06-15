@@ -10,13 +10,6 @@ type State = {
   error: Error | null;
 };
 
-/**
- * Catches uncaught render-time errors anywhere below it in the tree and
- * shows the shared `<ErrorState>` instead of the red screen of death.
- *
- * Wire-in: `app/_layout.tsx` wraps the navigator in this boundary, so a
- * single broken screen can't take the whole app down.
- */
 export class ErrorBoundary extends Component<Props, State> {
   state: State = { error: null };
 
@@ -25,7 +18,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    // Hook for crash reporting (Sentry, Bugsnag, etc). Console for now.
+    // Hook for Sentry/Bugsnag. Console for now.
     console.error('[ErrorBoundary]', error, info.componentStack);
   }
 

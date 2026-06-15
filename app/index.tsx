@@ -47,7 +47,6 @@ export default function MapScreen() {
     return <ErrorState message={state.error.message} onRetry={reload} />;
   }
 
-  // `success` or `error` with cached data — `state.data` is non-null here.
   const locations = state.data;
 
   return (

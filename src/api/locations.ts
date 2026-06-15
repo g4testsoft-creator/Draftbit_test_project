@@ -1,12 +1,3 @@
-/**
- * Application-level data service.
- *
- * Owns the orchestration logic for assembling locations from one or
- * more sources, plus the read-through in-memory cache. Screens and
- * hooks consume this module so the upstream data source can be swapped
- * without touching the UI layer.
- */
-
 import type { Location } from '@/types/location';
 import { getLocation, setLocations } from './cache';
 import { fetchAllCountriesAsLocations, fetchCountryByAlpha3 } from './restcountries';

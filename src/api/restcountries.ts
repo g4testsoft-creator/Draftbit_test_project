@@ -1,37 +1,6 @@
-/**
- * Thin client around the REST Countries v5 API.
- *
- * Docs: https://restcountries.com/docs
- *
- * v5 ships exactly one resource (`/countries`) reached via a small set
- * of endpoints; this module exposes just the two the app needs and
- * normalizes every response into the app's `Location` shape, dropping
- * entries that can't be plotted on a map (no primary capital, no
- * coordinates, no ISO-3 code).
- */
-
 import type { Location } from '@/types/location';
 
-const BASE_URL = 'https://api.restcountries.com/countries/v5';
-
-const RESPONSE_FIELDS = [
-  'names.common',
-  'names.official',
-  'codes.alpha_3',
-  'capitals',
-  'region',
-  'subregion',
-  'population',
-  'languages',
-  'currencies',
-  'flag.url_png',
-  'flag.description',
-  'timezones',
-].join(',');
-
-const MAX_PAGE_SIZE = 100;
-
-const apiKey = process.env.EXPO_PUBLIC_RESTCOUNTRIES_KEY;
+const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL?.replace(/\/+$/, '');
 
 export class RestCountriesApiError extends Error {
   constructor(
@@ -65,59 +34,38 @@ export type RawCountry = {
   timezones?: string[];
 };
 
-type RestCountriesEnvelope<T> = {
-  data?: {
-    objects?: T[];
-    meta?: {
-      total?: number;
-      count?: number;
-      limit?: number;
-      offset?: number;
-      more?: boolean;
-    };
-  };
-  errors?: { message: string }[];
-};
+type WorkerError = { error?: { message?: string } };
 
-function authHeaders(): HeadersInit {
-  if (!apiKey) {
+async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+  if (!BASE_URL) {
     throw new RestCountriesApiError(
-      'EXPO_PUBLIC_RESTCOUNTRIES_KEY is not set. Add it to your .env file. See .env.example.',
+      'EXPO_PUBLIC_API_BASE_URL is not set. Add the Cloudflare Worker URL to your .env file. See .env.example.',
     );
   }
-  return {
-    Accept: 'application/json',
-    Authorization: `Bearer ${apiKey}`,
-  };
-}
 
-async function get<T>(
-  path: string,
-  signal?: AbortSignal,
-): Promise<RestCountriesEnvelope<T>> {
   const response = await fetch(`${BASE_URL}${path}`, {
     signal,
-    headers: authHeaders(),
+    headers: { Accept: 'application/json' },
   });
 
-  let payload: RestCountriesEnvelope<T>;
+  let payload: T | WorkerError;
   try {
-    payload = (await response.json()) as RestCountriesEnvelope<T>;
+    payload = (await response.json()) as T | WorkerError;
   } catch {
     throw new RestCountriesApiError(
-      `Invalid JSON response from REST Countries (HTTP ${response.status})`,
+      `Invalid JSON response from the API (HTTP ${response.status})`,
       response.status,
     );
   }
 
   if (!response.ok) {
     const message =
-      payload.errors?.[0]?.message ??
-      `REST Countries request failed (HTTP ${response.status})`;
+      (payload as WorkerError).error?.message ??
+      `API request failed (HTTP ${response.status})`;
     throw new RestCountriesApiError(message, response.status);
   }
 
-  return payload;
+  return payload as T;
 }
 
 function pickPrimaryCapital(country: RawCountry): RawCapital | null {
@@ -169,58 +117,30 @@ export function normalizeCountry(country: RawCountry): Location | null {
   };
 }
 
-/**
- * Fetch every country across paginated v5 calls and return only those
- * that can be plotted on the map (has alpha_3 + primary capital + lat/lng).
- */
 export async function fetchAllCountriesAsLocations(
   signal?: AbortSignal,
 ): Promise<Location[]> {
-  const firstPath = `?response_fields=${encodeURIComponent(RESPONSE_FIELDS)}&limit=${MAX_PAGE_SIZE}&offset=0`;
-  const first = await get<RawCountry>(firstPath, signal);
-  const total = first.data?.meta?.total ?? first.data?.objects?.length ?? 0;
-  const pages: RawCountry[][] = [first.data?.objects ?? []];
-
-  const remainingOffsets: number[] = [];
-  for (let offset = MAX_PAGE_SIZE; offset < total; offset += MAX_PAGE_SIZE) {
-    remainingOffsets.push(offset);
-  }
-
-  // Fire remaining pages in parallel — the dataset is tiny (~250 records)
-  // and the API does not require sequential offsets.
-  const remaining = await Promise.all(
-    remainingOffsets.map(async (offset) => {
-      const path = `?response_fields=${encodeURIComponent(RESPONSE_FIELDS)}&limit=${MAX_PAGE_SIZE}&offset=${offset}`;
-      const page = await get<RawCountry>(path, signal);
-      return page.data?.objects ?? [];
-    }),
-  );
-  pages.push(...remaining);
-
+  const result = await getJson<{ objects: RawCountry[] }>('/countries', signal);
   const locations: Location[] = [];
-  for (const page of pages) {
-    for (const country of page) {
-      const normalized = normalizeCountry(country);
-      if (normalized) locations.push(normalized);
-    }
+  for (const country of result.objects ?? []) {
+    const normalized = normalizeCountry(country);
+    if (normalized) locations.push(normalized);
   }
   return locations;
 }
 
-/**
- * Look up a single country by ISO alpha-3 code. Used by the detail screen
- * so it can render correctly when deep-linked without going through the
- * list first.
- */
 export async function fetchCountryByAlpha3(
   alpha3: string,
   signal?: AbortSignal,
 ): Promise<Location | null> {
-  const path =
-    `/codes.alpha_3/${encodeURIComponent(alpha3)}` +
-    `?response_fields=${encodeURIComponent(RESPONSE_FIELDS)}`;
-  const result = await get<RawCountry>(path, signal);
-  const first = result.data?.objects?.[0];
-  if (!first) return null;
-  return normalizeCountry(first);
+  try {
+    const result = await getJson<{ object: RawCountry }>(
+      `/country/${encodeURIComponent(alpha3)}`,
+      signal,
+    );
+    return normalizeCountry(result.object);
+  } catch (err) {
+    if (err instanceof RestCountriesApiError && err.status === 404) return null;
+    throw err;
+  }
 }

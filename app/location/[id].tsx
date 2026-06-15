@@ -21,10 +21,6 @@ import { useLocation } from '@/hooks/useLocations';
 import { colors, radii, spacing, typography } from '@/theme';
 import { formatCurrencies, formatPopulation } from '@/utils/format';
 
-/**
- * Narrow the value coming back from `useLocalSearchParams` (which is
- * typed as `string | string[]`) to a single id string.
- */
 function useIdParam(): string | undefined {
   const params = useLocalSearchParams<{ id: string | string[] }>();
   return useMemo(() => {
@@ -48,9 +44,6 @@ export default function LocationDetailScreen() {
     );
   }
 
-  // If we have no data to show (either pure error, or "Missing id" on cold
-  // start), render the error state. Stale data + a failed background
-  // refresh falls through to the normal UI below.
   if (state.data === null) {
     return (
       <>

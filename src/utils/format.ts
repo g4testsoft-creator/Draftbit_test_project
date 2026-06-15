@@ -1,9 +1,6 @@
 import type { Currency } from '@/types/location';
 
-/**
- * Humanize a population count (e.g. `1234567` → `"1.2M"`).
- * Falls back to a raw string when the value is too small to abbreviate.
- */
+/** Humanize a population count (e.g. `1234567` → `"1.2M"`). */
 export function formatPopulation(value: number): string {
   if (!Number.isFinite(value) || value < 0) return '—';
   if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`;
@@ -12,10 +9,6 @@ export function formatPopulation(value: number): string {
   return String(value);
 }
 
-/**
- * Render a comma-separated list of currencies, including the symbol when
- * it adds information beyond the ISO code.
- */
 export function formatCurrencies(currencies: Currency[]): string {
   return currencies
     .map((c) =>
