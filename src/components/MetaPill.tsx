@@ -1,6 +1,6 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { colors, radii, spacing, typography } from '@/theme';
+import { styles } from './MetaPill.styles';
 
 type Props = {
   label: string;
@@ -15,26 +15,3 @@ export function MetaPill({ label, value }: Props) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  pill: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderWidth: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm - 2,
-    borderRadius: radii.pill,
-  },
-  label: {
-    ...typography.caption,
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  value: {
-    ...typography.body,
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
-  },
-});

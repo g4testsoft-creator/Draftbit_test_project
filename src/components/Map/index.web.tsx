@@ -12,6 +12,7 @@ import {
 
 import { colors } from '@/theme';
 
+import { mapContainerStyle, popupDescriptionStyle, popupLinkStyle } from './styles.web';
 import type { MapHandle, MapViewProps, MarkerProps } from './types';
 
 export type {
@@ -100,7 +101,7 @@ export const MapView = forwardRef<MapHandle, MapViewProps>(function MapView(
       <MapContainer
         center={[initialRegion.latitude, initialRegion.longitude]}
         zoom={zoom}
-        style={{ width: '100%', height: '100%' }}
+        style={mapContainerStyle}
         zoomControl
         scrollWheelZoom={zoomEnabled ?? true}
         dragging={scrollEnabled ?? true}
@@ -134,7 +135,7 @@ export function Marker({
       {title || description ? (
         <Popup>
           {title ? <strong>{title}</strong> : null}
-          {description ? <div style={{ marginTop: 4 }}>{description}</div> : null}
+          {description ? <div style={popupDescriptionStyle}>{description}</div> : null}
           {onCalloutPress ? (
             <a
               href="#"
@@ -142,12 +143,7 @@ export function Marker({
                 e.preventDefault();
                 onCalloutPress();
               }}
-              style={{
-                display: 'inline-block',
-                marginTop: 8,
-                color: colors.primary,
-                fontWeight: 600,
-              }}
+              style={popupLinkStyle}
             >
               View details ›
             </a>

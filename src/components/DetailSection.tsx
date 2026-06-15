@@ -1,6 +1,6 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { spacing, typography } from '@/theme';
+import { styles } from './DetailSection.styles';
 
 type Props = {
   title: string;
@@ -15,15 +15,3 @@ export function DetailSection({ title, body }: Props) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  section: {
-    gap: spacing.xs,
-  },
-  title: {
-    ...typography.subtitle,
-  },
-  body: {
-    ...typography.body,
-  },
-});
